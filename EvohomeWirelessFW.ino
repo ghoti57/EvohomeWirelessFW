@@ -546,6 +546,7 @@ void loop() {
        detachInterrupt(GDO2_INT);
        while(((CCx.Write(CCx_SIDLE,0)>>4)&7)!=0);
        while(((CCx.Write(CCx_STX,0)>>4)&7)!=2);//will calibrate when going to tx
+       PORTD |= GDO0_PD;  // Force start in mark when we switch to TX
        pinMode(GDO0_PIN,OUTPUT);
        sm=pmSendActive;
        highnib=true;
