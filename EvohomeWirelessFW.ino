@@ -34,11 +34,10 @@
 
 #define VERSION_NO "0.8"
 
-#define GDO0_INT 0 // INT0(PD2) wired to GDO0 on CC1101
-#define GDO2_INT 1 // INT1(PD3) wired to GDO2 on CC1101 (CCx_IOCFG2==0x0B Serial Clock. Synchronous to the data in synchronous serial mode. In RX mode, data is set up on the falling edge by CC1101 when GDOx_INV=0. In TX mode, data is sampled by CC1101 on the rising edge of the serial clock when GDOx_INV=0.)
+#define GDO2_INT INT1    // INT1(PD3) wired to GDO2 on CC1101 (CCx_IOCFG2==0x0B Serial Clock. Synchronous to the data in synchronous serial mode. In RX mode, data is set up on the falling edge by CC1101 when GDOx_INV=0. In TX mode, data is sampled by CC1101 on the rising edge of the serial clock when GDOx_INV=0.)
 
-#define GDO0_PD 4 // PD2(INT0) wired to GDO0 on CC1101 (CCx_IOCFG0==0x0C Serial Synchronous Data Output. Used for synchronous serial mode.)
-#define GDO2_PD 8 // PD3(INT1) wired to GDO2 on CC1101
+#define GDO0_PD (1<<PD2) // PD2(INT0) wired to GDO0 on CC1101 (CCx_IOCFG0==0x0C Serial Synchronous Data Output. Used for synchronous serial mode.)
+#define GDO0_PIN 2       // PD2(INT0) 
 
 #define SYNC_ON_32BITS
 
@@ -547,7 +546,7 @@ void loop() {
        detachInterrupt(GDO2_INT);
        while(((CCx.Write(CCx_SIDLE,0)>>4)&7)!=0);
        while(((CCx.Write(CCx_STX,0)>>4)&7)!=2);//will calibrate when going to tx
-       pinMode(2,OUTPUT);
+       pinMode(GDO0_PIN,OUTPUT);
        sm=pmSendActive;
        highnib=true;
        bit_counter=0;
