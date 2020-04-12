@@ -34,10 +34,10 @@
 
 #define VERSION_NO "0.8"
 
-#define GDO2_INT INT1    // INT1(PD3) wired to GDO2 on CC1101 (CCx_IOCFG2==0x0B Serial Clock. Synchronous to the data in synchronous serial mode. In RX mode, data is set up on the falling edge by CC1101 when GDOx_INV=0. In TX mode, data is sampled by CC1101 on the rising edge of the serial clock when GDOx_INV=0.)
+#define GDO2_INT INT3    // INT1(PD3) wired to GDO2 on CC1101 (CCx_IOCFG2==0x0B Serial Clock. Synchronous to the data in synchronous serial mode. In RX mode, data is set up on the falling edge by CC1101 when GDOx_INV=0. In TX mode, data is sampled by CC1101 on the rising edge of the serial clock when GDOx_INV=0.)
 
 #define GDO0_PD (1<<PD2) // PD2(INT0) wired to GDO0 on CC1101 (CCx_IOCFG0==0x0C Serial Synchronous Data Output. Used for synchronous serial mode.)
-#define GDO0_PIN 2       // PD2(INT0) 
+#define GDO0_PIN 0       // PD2(INT0) 
 #define GDO_PORT PORTD
 #define GDO_PIN  PIND
 
