@@ -38,6 +38,8 @@
 
 #define GDO0_PD (1<<PD2) // PD2(INT0) wired to GDO0 on CC1101 (CCx_IOCFG0==0x0C Serial Synchronous Data Output. Used for synchronous serial mode.)
 #define GDO0_PIN 2       // PD2(INT0) 
+#define GDO_PORT PORTD
+#define GDO_PIN  PIND
 
 #define SYNC_ON_32BITS
 
@@ -130,7 +132,7 @@ char param[10];
 
 // Interrupt to receive data and find_sync_word
 void sync_clk_in() {
-    byte new_bit=(PIND & GDO0_PD); //sync data
+    byte new_bit=(GDO_PIN & GDO0_PD); //sync data
           
     //keep our buffer rolling even when we're in sync
     sync_buffer<<=1;
@@ -214,7 +216,7 @@ void sync_clk_out() {
     {
       if(!bit_counter)
       {
-        PORTD&=~GDO0_PD;
+        GDO_PORT &= ~GDO0_PD;
         if(out_flags<5)
         {
           byte_buffer=0x55;
@@ -255,16 +257,16 @@ void sync_clk_out() {
       else
       {
         if(byte_buffer&0x01)
-          PORTD|=GDO0_PD;
+          GDO_PORT |=  GDO0_PD;
         else
-          PORTD&=~GDO0_PD;
+          GDO_PORT &= ~GDO0_PD;
         byte_buffer>>=1;
       }
       bit_counter++;
     }
     else
     {
-      PORTD|=GDO0_PD;
+      GDO_PORT |= GDO0_PD;
       bit_counter=0;
     }
 }
@@ -546,7 +548,7 @@ void loop() {
        detachInterrupt(GDO2_INT);
        while(((CCx.Write(CCx_SIDLE,0)>>4)&7)!=0);
        while(((CCx.Write(CCx_STX,0)>>4)&7)!=2);//will calibrate when going to tx
-       PORTD |= GDO0_PD;  // Force start in mark when we switch to TX
+       GDO_PORT |= GDO0_PD;  // Force start in mark when we switch to TX
        pinMode(GDO0_PIN,OUTPUT);
        sm=pmSendActive;
        highnib=true;
