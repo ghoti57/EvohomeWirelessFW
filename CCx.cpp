@@ -34,7 +34,7 @@ CCX::CCX(){}
 // Power On Reset as described in  19.1.2 of cc1100 datasheet, tried APOR as described in 19.1.1 but that did not work :-(
 void CCX::PowerOnStartUp()
 {
-   Spi.mode((0 << SPR1) | (0 << SPR0));//SPICLK=CPU/4
+   Spi.mode( ( 1<<SPR1 ) | ( 1<<SPR0 ) );//SPICLK=CPU/128
 
    // start manual Power On Reset
    Spi.slaveSelect(HIGH);
