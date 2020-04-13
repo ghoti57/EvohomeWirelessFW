@@ -309,7 +309,7 @@ void loop() {
     in_sync=false;
     bit_counter=0;
     circ_buffer.push(0x35,true);
-    pinMode(2,INPUT);
+    pinMode(GDO0_PIN,INPUT);
     while(((CCx.Write(CCx_SRX,0)>>4)&7)!=1); 
     attachInterrupt(GDO2_INT, sync_clk_in, RISING);
     pp=0;
