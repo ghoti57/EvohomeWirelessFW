@@ -271,6 +271,11 @@ void sync_clk_out() {
     }
 }
 
+static void version(void) {
+  Serial.println(F("# EvohomeWirelessFW v" VERSION_NO " Copyright (c) 2015 Hydrogenetic"));
+  Serial.println(F("# Licensed under GPL-3.0+ <http://spdx.org/licenses/GPL-3.0+>"));
+}
+
 // Setup
 void setup() {
   //from http://forum.arduino.cc/index.php?topic=54623.0
@@ -293,9 +298,10 @@ void setup() {
   // bytes to serial
   Serial.begin(115200);
 
-  Serial.println(F("# EvohomeWirelessFW v" VERSION_NO " Copyright (c) 2015 Hydrogenetic"));
-  Serial.println(F("# Licensed under GPL-3.0+ <http://spdx.org/licenses/GPL-3.0+>"));
+  Serial1.end();
 
+  version();
+  
   // Attach the find_sync_word interrupt function to the
   // falling edge of the serial clock connected to INT(1)
   attachInterrupt(GDO2_INT, sync_clk_in, FALLING);
@@ -439,6 +445,8 @@ void loop() {
        char out=Serial.read();
        if(out=='\r')
        {
+         if( sm==pmIdle )
+           version();
        }
        else if(out=='\n' && sm==pmSendHavePacket)//send on lf
        {
