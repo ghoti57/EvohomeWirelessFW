@@ -73,8 +73,10 @@ enum enflags{
   enW=enI<<1,  
 };
 
+const byte pre_sync[]={ 0x55,0x55,0x55,0x55,0x55, 0xff,0x00 , 0x33,0x55,0x53 };
+const byte trailer[] = { 0x35, 0x55,0x55,0x55 };
+
 const byte manc_enc[16]={0xAA,0xA9,0xA6,0xA5,0x9A,0x99,0x96,0x95,0x6A,0x69,0x66,0x65,0x5A,0x59,0x56,0x55};
-const byte pre_sync[5]={0xff,0x00,0x33,0x55,0x53};
 const byte header_flags[16]={0x0f,0x0c,0x0d,0x0b,0x27,0x24,0x25,0x23,0x47,0x44,0x45,0x43,0x17,0x14,0x15,0x13};
 
 byte out_flags;
@@ -208,72 +210,96 @@ void sync_clk_in() {
     }
 }
 
+static bool tx_next_byte( byte *nextByte ) {
+  bool more = true;
+
+  if( pp < sizeof(pre_sync) ) { // Preamble, Sync word and signature
+    *nextByte=pre_sync[pp++];
+  } else if( sp<op ) { // Message body
+    *nextByte=send_buffer[sp];
+    if(highnib) {
+      *nextByte=manc_enc[(*nextByte>>4)&0xF];
+    } else {
+      circ_buffer.push(*nextByte); //echo bytes when sending
+      *nextByte=manc_enc[*nextByte&0xF];
+      sp++;
+    }
+    highnib=!highnib;
+  } else if( sp <= op+sizeof(trailer) ) { // Trailer + post message training
+    *nextByte = trailer[sp-op];
+    sp++;
+  } else { // Done
+    more = false;
+  }
+
+  return more;
+}
+
 //Interrupt to send data
 void sync_clk_out() {
-    if(sm!=pmSendActive)
-      return;
-    if(bit_counter<9)
-    {
-      if(!bit_counter)
-      {
-        GDO_PORT &= ~GDO0_PD;
-        if(out_flags<5)
-        {
-          byte_buffer=0x55;
-          out_flags++;
-        }
-        else if(pp<5)
-          byte_buffer=pre_sync[pp++];
-        else
-        {
-          if(sp<op)
-          {
-            byte_buffer=send_buffer[sp];
-            if(highnib)
-              byte_buffer=manc_enc[(byte_buffer>>4)&0xF];
-            else
-            {
-              circ_buffer.push(byte_buffer);//echo bytes when sending
-              byte_buffer=manc_enc[byte_buffer&0xF];
-              sp++;
-            }
-            highnib=!highnib;
-          }
-          else if(sp<=op+4)
-          {
-            if(sp==op)
-              byte_buffer=0x35;
-            else
-              byte_buffer=0x55;
-            sp++;
-          }
-          else
-          {
-            sm=pmSendFinished;
-            return;
-          }
-        }
-      }
-      else
-      {
-        if(byte_buffer&0x01)
-          GDO_PORT |=  GDO0_PD;
-        else
-          GDO_PORT &= ~GDO0_PD;
-        byte_buffer>>=1;
-      }
-      bit_counter++;
-    }
+  if(sm!=pmSendActive)
+    return;
+
+  if( !bit_counter) { // Start bit
+    GDO_PORT &= ~GDO0_PD;
+    if( !tx_next_byte( &byte_buffer ) )
+       sm = pmSendFinished;
+  } else if( bit_counter<9 ) { // data bits
+    if(byte_buffer&0x01)
+      GDO_PORT |=  GDO0_PD;
     else
-    {
-      GDO_PORT |= GDO0_PD;
-      bit_counter=0;
-    }
+      GDO_PORT &= ~GDO0_PD;
+    byte_buffer>>=1;
+  } else { // Stop bit
+    GDO_PORT |= GDO0_PD;
+  }
+
+  bit_counter = (bit_counter+1) % 10;
 }
 
 static void version(void) {
   Serial.println(F("# EvohomeWirelessFW v" VERSION_NO " Copyright (c) 2015 Hydrogenetic"));
   Serial.println(F("# Licensed under GPL-3.0+ <http://spdx.org/licenses/GPL-3.0+>"));
+}
+
+static void select_rx(void) {
+  detachInterrupt(GDO2_INT);
+  
+  in_sync=false;
+  bit_counter=0;
+  circ_buffer.push(0x35,true);
+
+  pp=0;
+  op=0;
+  sp=0;
+  out_flags=0;
+
+  while(((CCx.Write(CCx_SRX,0)>>4)&7)!=1); 
+
+  sm=pmIdle;
+
+  pinMode(GDO0_PIN,INPUT);
+  attachInterrupt(GDO2_INT, sync_clk_in, FALLING);
+}
+
+static void select_tx(void) {
+  detachInterrupt(GDO2_INT);
+
+  while(((CCx.Write(CCx_SIDLE,0)>>4)&7)!=0);
+  while(((CCx.Write(CCx_STX,0)>>4)&7)!=2);//will calibrate when going to tx
+
+  highnib=true;
+  bit_counter=0;
+  sp=0;
+  pp=0;
+
+  circ_buffer.push(0x53,true); //don't push anything while interrupt is running
+
+  sm=pmSendActive;
+
+  GDO_PORT |= GDO0_PD;  // Force start in mark when we switch to TX
+  pinMode(GDO0_PIN,OUTPUT);
+  attachInterrupt(GDO2_INT, sync_clk_out, RISING);
 }
 
 // Setup
@@ -291,39 +317,24 @@ void setup() {
   CCx.PowerOnStartUp();
   CCx.Setup(0);
   while(((CCx.Write(CCx_SIDLE,0)>>4)&7)!=0);
-  while(((CCx.Write(CCx_SRX,0)>>4)&7)!=1);//will calibrate when going to rx
+  sm = pmSendFinished;
   
   // Data is received at 38k4 (packet bytes only at 19k2 due to manchster encoding)
   // 115k2 provides enough speed to perform processing and write the received
   // bytes to serial
   Serial.begin(115200);
-
-  Serial1.end();
-
   version();
-  
-  // Attach the find_sync_word interrupt function to the
-  // falling edge of the serial clock connected to INT(1)
-  attachInterrupt(GDO2_INT, sync_clk_in, FALLING);
+
+//  Serial1.end();
 }
 
 // Main loop
 void loop() {
-  if(sm==pmSendFinished)
-  {
-    detachInterrupt(GDO2_INT);
-    in_sync=false;
-    bit_counter=0;
-    circ_buffer.push(0x35,true);
-    pinMode(GDO0_PIN,INPUT);
-    while(((CCx.Write(CCx_SRX,0)>>4)&7)!=1); 
-    attachInterrupt(GDO2_INT, sync_clk_in, FALLING);
-    pp=0;
-    op=0;
-    sp=0;
-    sm=pmIdle;
+  if(sm==pmSendFinished) {
+    select_rx();
   }
-  if (circ_buffer.remain())
+
+  if( circ_buffer.remain() )
   {
     bool mark;
     byte in(circ_buffer.pop(mark));
@@ -474,7 +485,6 @@ void loop() {
            {
              param[pp]=0;
              if(sp==0){
-               out_flags=0;
                if(!strcmp(param,"I"))
                  out_flags|=enI;
                else if(!strcmp(param,"RQ"))
@@ -551,20 +561,7 @@ void loop() {
        }
      }
   }
-  else if(sm==pmSendReady && pm!=pmNewPacket)
-  {
-       detachInterrupt(GDO2_INT);
-       while(((CCx.Write(CCx_SIDLE,0)>>4)&7)!=0);
-       while(((CCx.Write(CCx_STX,0)>>4)&7)!=2);//will calibrate when going to tx
-       GDO_PORT |= GDO0_PD;  // Force start in mark when we switch to TX
-       pinMode(GDO0_PIN,OUTPUT);
-       sm=pmSendActive;
-       highnib=true;
-       bit_counter=0;
-       sp=0;
-       pp=0;
-       out_flags=0;//reuse for preamble counter
-       circ_buffer.push(0x53,true); //don't push anything while interrupt is running
-       attachInterrupt(GDO2_INT, sync_clk_out, RISING);
+  else if(sm==pmSendReady && pm!=pmNewPacket) {
+    select_tx();
   }
 }
