@@ -317,7 +317,7 @@ void loop() {
     circ_buffer.push(0x35,true);
     pinMode(GDO0_PIN,INPUT);
     while(((CCx.Write(CCx_SRX,0)>>4)&7)!=1); 
-    attachInterrupt(GDO2_INT, sync_clk_in, RISING);
+    attachInterrupt(GDO2_INT, sync_clk_in, FALLING);
     pp=0;
     op=0;
     sp=0;
@@ -565,6 +565,6 @@ void loop() {
        pp=0;
        out_flags=0;//reuse for preamble counter
        circ_buffer.push(0x53,true); //don't push anything while interrupt is running
-       attachInterrupt(GDO2_INT, sync_clk_out, FALLING);
+       attachInterrupt(GDO2_INT, sync_clk_out, RISING);
   }
 }
