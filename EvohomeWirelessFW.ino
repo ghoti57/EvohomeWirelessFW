@@ -29,7 +29,6 @@
 //http://blog.kriegsman.org/2013/12/01/optimizing-10-lines-of-arduino-code-youre-wrong-so-am-i/
 
 #include "CCx.h"
-#include "CCxCfg.h"
 #include "Buffer.h"
 
 #define VERSION_NO "0.8"
