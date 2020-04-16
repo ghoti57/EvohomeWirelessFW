@@ -24,10 +24,19 @@
 
 #include "Arduino.h"
 
+#if defined(ARDUINO_AVR_LEONARDO)
 #define SCK_PIN   15
 #define MISO_PIN  14
 #define MOSI_PIN  16
 #define SS_PIN    10
+#endif
+
+#if defined(ARDUINO_AVR_NANO)
+#define SCK_PIN   13
+#define MISO_PIN  12
+#define MOSI_PIN  11
+#define SS_PIN    10
+#endif
 
 class SPI
 {
