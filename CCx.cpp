@@ -154,6 +154,40 @@ byte CCX::Strobe(byte addr)
    return result;
 }
 
+void CCX::IdleMode(void)
+{
+  byte status;
+
+  do {
+    status = CCx.Write( CCx_SIDLE,0 );
+    status >>= 4;
+    status &= 7;
+  } while( status != 0 );
+}
+
+void CCX::RxMode(void)
+{
+  byte status;
+
+  do {
+  	status = CCx.Write( CCx_SRX,0 );
+	status >>= 4;
+	status &= 7;
+  } while( status != 1 );
+}
+
+void CCX::TxMode(void)
+{
+  byte status;
+
+  do {
+    status = CCx.Write( CCx_STX,0 );
+    status >>= 4;
+    status &= 7;
+  } while( status != 2 );
+}
+  
+
 //configure registers of cc1100 making it work in specific mode
 void CCX::Setup(byte configId)
 {

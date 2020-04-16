@@ -73,8 +73,10 @@ enum enflags{
   enW=enI<<1,  
 };
 
-const byte pre_sync[]={ 0x55,0x55,0x55,0x55,0x55, 0xff,0x00 , 0x33,0x55,0x53 };
-const byte trailer[] = { 0x35, 0x55,0x55,0x55 };
+const byte preamble[] = { 0x55,0x55,0x55,0x55,0x55 };
+const byte sync[]     = { 0xff,0x00 };
+const byte header[]   = { 0x33,0x55,0x53 };
+const byte trailer[]  = { 0x35, 0x55,0x55,0x55 };
 
 const byte manc_enc[16]={0xAA,0xA9,0xA6,0xA5,0x9A,0x99,0x96,0x95,0x6A,0x69,0x66,0x65,0x5A,0x59,0x56,0x55};
 const byte header_flags[16]={0x0f,0x0c,0x0d,0x0b,0x27,0x24,0x25,0x23,0x47,0x44,0x45,0x43,0x17,0x14,0x15,0x13};
@@ -135,18 +137,18 @@ char param[10];
 // Interrupt to receive data and find_sync_word
 void sync_clk_in() {
     byte new_bit=(GDO_PIN & GDO0_PD); //sync data
-          
+
     //keep our buffer rolling even when we're in sync
     sync_buffer<<=1;
     if(new_bit)
       sync_buffer++;
-  
+
     if(!in_sync)
     {
       if(sync_buffer==SYNC_WORD)
       {
         circ_buffer.push(0x53,true);
-        
+
         bit_counter=0;
         byte_buffer=0;
         bm=0x10;
@@ -213,10 +215,16 @@ void sync_clk_in() {
 static bool tx_next_byte( byte *nextByte ) {
   bool more = true;
 
-  if( pp < sizeof(pre_sync) ) { // Preamble, Sync word and signature
-    *nextByte=pre_sync[pp++];
+  if( !pp ) circ_buffer.push( 0x53,true);
+
+  if( pp < sizeof(preamble) ) { // Preamble
+    *nextByte = preamble[pp++];
+  } else if( pp < sizeof(sync)+sizeof(preamble) ) { // Sync word
+    *nextByte = sync[  pp++   -sizeof(preamble) ];
+  } else if( pp < sizeof(header)+sizeof(sync)+sizeof(preamble) ) { // Header
+    *nextByte = header[  pp++   -sizeof(sync)-sizeof(preamble) ];
   } else if( sp<op ) { // Message body
-    *nextByte=send_buffer[sp];
+    *nextByte = send_buffer[sp];
     if(highnib) {
       *nextByte=manc_enc[(*nextByte>>4)&0xF];
     } else {
@@ -229,6 +237,7 @@ static bool tx_next_byte( byte *nextByte ) {
     *nextByte = trailer[sp-op];
     sp++;
   } else { // Done
+    circ_buffer.push( 0x35,true);
     more = false;
   }
 
@@ -264,20 +273,18 @@ static void version(void) {
 
 static void select_rx(void) {
   detachInterrupt(GDO2_INT);
-  
+
   in_sync=false;
   bit_counter=0;
-  circ_buffer.push(0x35,true);
 
   pp=0;
   op=0;
   sp=0;
   out_flags=0;
 
-  while(((CCx.Write(CCx_SRX,0)>>4)&7)!=1); 
-
+  CCx.RxMode();
   sm=pmIdle;
-
+
   pinMode(GDO0_PIN,INPUT);
   attachInterrupt(GDO2_INT, sync_clk_in, FALLING);
 }
@@ -285,15 +292,13 @@ static void select_rx(void) {
 static void select_tx(void) {
   detachInterrupt(GDO2_INT);
 
-  while(((CCx.Write(CCx_SIDLE,0)>>4)&7)!=0);
-  while(((CCx.Write(CCx_STX,0)>>4)&7)!=2);//will calibrate when going to tx
+  CCx.IdleMode();
+  CCx.TxMode();  //will calibrate when going to tx
 
   highnib=true;
   bit_counter=0;
   sp=0;
   pp=0;
-
-  circ_buffer.push(0x53,true); //don't push anything while interrupt is running
 
   sm=pmSendActive;
 
@@ -316,16 +321,15 @@ void setup() {
   // Power up and configure the CC1101
   CCx.PowerOnStartUp();
   CCx.Setup(0);
-  while(((CCx.Write(CCx_SIDLE,0)>>4)&7)!=0);
-  sm = pmSendFinished;
-  
+  CCx.IdleMode();
+
   // Data is received at 38k4 (packet bytes only at 19k2 due to manchster encoding)
   // 115k2 provides enough speed to perform processing and write the received
   // bytes to serial
   Serial.begin(115200);
   version();
 
-//  Serial1.end();
+  sm = pmSendFinished;
 }
 
 // Main loop
@@ -399,7 +403,7 @@ void loop() {
           pDev=(byte*)&devid+2;//platform specific
         }
         else if(pkt_pos==6)
-        {  
+        {
           if(!(in_flags&enDev1))
             Serial.print("--:------ "); 
           sprintf(tmp,"%02hu:%06lu ",(uint8_t)(devid>>18)&0x3F,devid&0x3FFFF);
@@ -454,6 +458,7 @@ void loop() {
      if(Serial.available())
      {
        char out=Serial.read();
+
        if(out=='\r')
        {
          if( sm==pmIdle )
@@ -463,7 +468,7 @@ void loop() {
        {
          byte sc=0;
          for(int n=0;n<op;n++)
-           sc+=send_buffer[n];      
+           sc+=send_buffer[n];
          send_buffer[op++]=-sc;
          sm=pmSendReady;
        }
@@ -533,7 +538,7 @@ void loop() {
                sscanf(param,"%03hu",&out_len);
                send_buffer[op++]=out_len;
              }
-             
+
              pp=0;
              sp++;
            }
@@ -561,7 +566,7 @@ void loop() {
        }
      }
   }
-  else if(sm==pmSendReady && pm!=pmNewPacket) {
+  else if( sm==pmSendReady && pm!=pmNewPacket ) {
     select_tx();
   }
 }

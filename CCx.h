@@ -135,6 +135,10 @@ class CCX
     byte WriteBurst(byte addr, const byte* dataPtr, byte dataCount);
     byte Strobe(byte addr);
 
+    void IdleMode(void);
+    void RxMode(void);
+    void TxMode(void);
+    
     //power on reset as discribed in  27.1 of cc1100 datasheet
     void PowerOnStartUp();
 
